@@ -1,6 +1,7 @@
 .git
 *Dockerfile*
 *docker-compose*
-.env
+# .env
 node_modules
 dist
+**.bak

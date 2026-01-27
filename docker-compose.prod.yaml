@@ -1,4 +1,4 @@
-# version: "3.8"
+version: "3.8"
 
 services:
   api:
@@ -19,7 +19,7 @@ services:
       - dokploy-network
       - devdreams
     env_file:
-      - .env
+      - .env.prod
     expose:
       - "8080"
 
@@ -29,7 +29,7 @@ services:
     build: ./evolution-manager-v2
     restart: always
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"
     networks:
       - evolution-net
 
@@ -56,7 +56,7 @@ services:
     image: postgres:15
     restart: always
     env_file:
-      - .env
+      - .env.prod
     command:
       - postgres
       - -c
@@ -87,4 +87,4 @@ networks:
   dokploy-network:
     external: true
   devdreams:
-    external: true 
+    external: true
