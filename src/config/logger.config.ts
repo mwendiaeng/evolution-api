@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import fs from 'fs';
+import path from 'path';
 
 import { configService, Log } from './env.config';
 const packageJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
@@ -59,15 +60,23 @@ enum Background {
 export class Logger {
   private readonly configService = configService;
   private context: string;
+  private logFilePath: string;
 
   constructor(context = 'Logger') {
     this.context = context;
+    this.logFilePath = path.join(process.cwd(), 'logs', 'api', `${this.context.toLowerCase().replace(/\s+/g, '')}.log`);
+    // Ensure the logs directory exists
+    const logDir = path.dirname(this.logFilePath);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
   }
 
   private instance = null;
 
   public setContext(value: string) {
     this.context = value;
+    this.logFilePath = path.join(process.cwd(), 'logs', 'api', `${this.context.toLowerCase().replace(/\s+/g, '')}.log`);
   }
 
   public setInstance(value: string) {
@@ -81,6 +90,11 @@ export class Logger {
 
     const typeValue = typeof value;
     if (types.includes(type)) {
+      const logMessage = this.formatLogMessage(value, type, typeValue);
+
+      // Log to file
+      this.logToFile(logMessage);
+
       if (configService.get<Log>('LOG').COLOR) {
         console.log(
           /*Command.UNDERSCORE +*/ Command.BRIGHT + Level[type],
@@ -121,6 +135,49 @@ export class Logger {
           value,
         );
       }
+    }
+  }
+
+  // private formatLogMessage(value: any, type: Type, typeValue: string): string {
+  //   const timestamp = formatDateLog(Date.now());
+  //   const instanceStr = this.instance ? `[${this.instance}]` : '';
+  //   const baseMessage = `[Evolution API] ${instanceStr} v${packageJson.version} ${process.pid} - ${timestamp} ${type} [${this.context}] [${typeValue}]`;
+
+  //   if (typeValue === 'object') {
+  //     return `${baseMessage} ${JSON.stringify(value)}\n`;
+  //   } else {
+  //     return `${baseMessage} ${value}\n`;
+  //   }
+  // }
+
+  private formatLogMessage(value: any, type: Type, typeValue: string): string {
+    const timestamp = formatDateLog(Date.now());
+    const instanceStr = this.instance ? `[${this.instance}]` : '';
+    const baseMessage = `[Evolution API] ${instanceStr} v${packageJson.version} ${process.pid} - ${timestamp} ${type} [${this.context}] [${typeValue}]`;
+
+    if (typeValue === 'object') {
+      try {
+        // --- FIX STARTS HERE ---
+        // We use a custom replacer to handle BigInt/Long values if needed,
+        // or simply wrap in try/catch to prevent crashes.
+        return `${baseMessage} ${JSON.stringify(value, (key, val) =>
+          typeof val === 'bigint' ? val.toString() : val,
+        )}\n`;
+      } catch (error: any) {
+        // If stringify fails, return a safe placeholder so the app doesn't crash
+        return `${baseMessage} [Unable to serialize object: ${error.message}]\n`;
+      }
+      // --- FIX ENDS HERE ---
+    } else {
+      return `${baseMessage} ${value}\n`;
+    }
+  }
+
+  private logToFile(message: string): void {
+    try {
+      fs.appendFileSync(this.logFilePath, message);
+    } catch (error) {
+      console.error('Failed to write to log file:', error);
     }
   }
 

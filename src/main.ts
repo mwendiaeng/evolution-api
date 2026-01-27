@@ -44,20 +44,23 @@ async function bootstrap() {
   const prismaRepository = new PrismaRepository(configService);
   await prismaRepository.onModuleInit();
 
+  const corsConfig = configService.get<Cors>('CORS');
+  const configuredOrigins = corsConfig.ORIGIN.map((origin) => origin?.trim()).filter(Boolean);
+  const allowAllOrigins = configuredOrigins.includes('*');
+
   app.use(
     cors({
       origin(requestOrigin, callback) {
-        const { ORIGIN } = configService.get<Cors>('CORS');
-        if (ORIGIN.includes('*')) {
+        if (!requestOrigin) {
           return callback(null, true);
         }
-        if (ORIGIN.indexOf(requestOrigin) !== -1) {
+        if (allowAllOrigins || configuredOrigins.indexOf(requestOrigin) !== -1) {
           return callback(null, true);
         }
         return callback(new Error('Not allowed by CORS'));
       },
-      methods: [...configService.get<Cors>('CORS').METHODS],
-      credentials: configService.get<Cors>('CORS').CREDENTIALS,
+      methods: [...corsConfig.METHODS],
+      credentials: corsConfig.CREDENTIALS,
     }),
     urlencoded({ extended: true, limit: '136mb' }),
     json({ limit: '136mb' }),

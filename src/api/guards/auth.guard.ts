@@ -7,9 +7,33 @@ import { NextFunction, Request, Response } from 'express';
 
 const logger = new Logger('GUARD');
 
+const API_KEY_COOKIE = 'evo_apikey';
+
+const parseCookies = (header?: string): Record<string, string> => {
+  const cookies: Record<string, string> = {};
+  if (!header) return cookies;
+  header.split(';').forEach((part) => {
+    const [rawKey, ...rest] = part.split('=');
+    const key = rawKey?.trim();
+    if (!key) return;
+    const value = rest.join('=')?.trim();
+    if (value) {
+      cookies[key] = decodeURIComponent(value);
+    }
+  });
+  return cookies;
+};
+
+const getApiKey = (req: Request) => {
+  const headerKey = req.get('apikey');
+  if (headerKey) return headerKey;
+  const cookies = parseCookies(req.headers.cookie);
+  return cookies[API_KEY_COOKIE];
+};
+
 async function apikey(req: Request, _: Response, next: NextFunction) {
   const env = configService.get<Auth>('AUTHENTICATION').API_KEY;
-  const key = req.get('apikey');
+  const key = getApiKey(req);
   const db = configService.get<Database>('DATABASE');
 
   if (!key) {

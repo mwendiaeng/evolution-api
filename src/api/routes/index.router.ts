@@ -37,6 +37,7 @@ enum HttpStatus {
 
 const router: Router = Router();
 const serverConfig = configService.get('SERVER');
+const API_KEY_COOKIE = 'evo_apikey';
 const databaseConfig = configService.get<Database>('DATABASE');
 const guards = [instanceExistsGuard, instanceLoggedGuard, authGuard['apikey']];
 
@@ -206,6 +207,16 @@ router
   })
   .post('/verify-creds', authGuard['apikey'], async (req, res) => {
     const facebookConfig = configService.get<Facebook>('FACEBOOK');
+    const apiKey = req.get('apikey');
+    if (apiKey) {
+      res.cookie(API_KEY_COOKIE, apiKey, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: serverConfig.TYPE === 'https',
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        path: '/',
+      });
+    }
     return res.status(HttpStatus.OK).json({
       status: HttpStatus.OK,
       message: 'Credentials are valid',

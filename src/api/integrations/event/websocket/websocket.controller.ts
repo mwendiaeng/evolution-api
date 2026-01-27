@@ -3,7 +3,7 @@ import { WAMonitoringService } from '@api/services/monitor.service';
 import { Auth, configService, Cors, Log, Websocket } from '@config/env.config';
 import { Logger } from '@config/logger.config';
 import { Server } from 'http';
-import { Server as SocketIO } from 'socket.io';
+import { Server as SocketIO, Socket } from 'socket.io';
 
 import { EmitData, EventController, EventControllerInterface } from '../event.controller';
 
@@ -27,42 +27,28 @@ export class WebsocketController extends EventController implements EventControl
       cors: { origin: this.cors },
       allowRequest: async (req, callback) => {
         try {
-          const url = new URL(req.url || '', 'http://localhost');
-          const params = new URLSearchParams(url.search);
-
           const { remoteAddress } = req.socket;
           const websocketConfig = configService.get<Websocket>('WEBSOCKET');
-          const allowedHosts = websocketConfig.ALLOWED_HOSTS || '127.0.0.1,::1,::ffff:127.0.0.1';
-          const allowAllHosts = allowedHosts.trim() === '*';
+          const allowedHosts = (websocketConfig.ALLOWED_HOSTS || '127.0.0.1,::1,::ffff:127.0.0.1')
+            .split(',')
+            .map((host) => host.trim())
+            .filter(Boolean);
+          const allowAllHosts = allowedHosts.includes('*');
+          const normalizeAddress = (address: string | undefined) =>
+            address?.replace(/^::ffff:/, '') || '';
+          const strippedAddress = normalizeAddress(remoteAddress);
+
           const isAllowedHost =
             allowAllHosts ||
-            allowedHosts
-              .split(',')
-              .map((h) => h.trim())
-              .includes(remoteAddress);
+            allowedHosts.some(
+              (host) => host === remoteAddress || host === strippedAddress || host === 'localhost',
+            );
 
-          if (params.has('EIO') && isAllowedHost) {
+          if (isAllowedHost) {
             return callback(null, true);
           }
 
-          const apiKey = params.get('apikey') || (req.headers.apikey as string);
-
-          if (!apiKey) {
-            this.logger.error('Connection rejected: apiKey not provided');
-            return callback('apiKey is required', false);
-          }
-
-          const instance = await this.prismaRepository.instance.findFirst({ where: { token: apiKey } });
-
-          if (!instance) {
-            const globalToken = configService.get<Auth>('AUTHENTICATION').API_KEY.KEY;
-            if (apiKey !== globalToken) {
-              this.logger.error('Connection rejected: invalid global token');
-              return callback('Invalid global token', false);
-            }
-          }
-
-          callback(null, true);
+          return callback('Host not allowed', false);
         } catch (error) {
           this.logger.error('Authentication error:');
           this.logger.error(error);
@@ -71,7 +57,7 @@ export class WebsocketController extends EventController implements EventControl
       },
     });
 
-    this.socket.on('connection', (socket) => {
+    const registerHandlers = (socket: Socket) => {
       this.logger.info('User connected');
 
       socket.on('disconnect', () => {
@@ -87,7 +73,12 @@ export class WebsocketController extends EventController implements EventControl
           this.logger.error(error);
         }
       });
-    });
+    };
+
+    this.socket.use(this.createAuthMiddleware());
+    this.socket.on('connection', registerHandlers);
+
+    this.socket.of(/^\/.+/).use(this.createAuthMiddleware()).on('connection', registerHandlers);
 
     this.logger.info('Socket.io initialized');
   }
@@ -106,6 +97,45 @@ export class WebsocketController extends EventController implements EventControl
 
   public get socket(): SocketIO {
     return this.io;
+  }
+
+  private createAuthMiddleware() {
+    return async (socket: Socket, next: (err?: Error) => void) => {
+      try {
+        const authKey = socket.handshake.auth?.apikey as string | undefined;
+        const protocolHeader = socket.handshake.headers['sec-websocket-protocol'] as string | undefined;
+        let apiKey = authKey;
+
+        if (!apiKey && protocolHeader) {
+          const protocols = protocolHeader.split(',').map((value) => value.trim());
+          const apikeyIndex = protocols.indexOf('apikey');
+          if (apikeyIndex !== -1 && protocols[apikeyIndex + 1]) {
+            apiKey = protocols[apikeyIndex + 1];
+          }
+        }
+
+        if (!apiKey) {
+          this.logger.error('Connection rejected: apiKey not provided');
+          return next(new Error('apiKey is required'));
+        }
+
+        const instance = await this.prismaRepository.instance.findFirst({ where: { token: apiKey } });
+
+        if (!instance) {
+          const globalToken = configService.get<Auth>('AUTHENTICATION').API_KEY.KEY;
+          if (apiKey !== globalToken) {
+            this.logger.error('Connection rejected: invalid global token');
+            return next(new Error('Invalid global token'));
+          }
+        }
+
+        return next();
+      } catch (error) {
+        this.logger.error('Authentication error:');
+        this.logger.error(error);
+        return next(new Error('Authentication error'));
+      }
+    };
   }
 
   public async emit({
