@@ -10,6 +10,7 @@ export default defineConfig({
   clean: true,
   minify: true,
   format: ['cjs', 'esm'],
+  exclude: ['**/*.bak'],
   onSuccess: async () => {
     cpSync('src/utils/translations', 'dist/translations', { recursive: true });
   },

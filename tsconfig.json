@@ -29,7 +29,7 @@
     },
     "moduleResolution": "Node"
   },
-  "exclude": ["node_modules", "./test", "./dist", "./prisma"],
+  "exclude": ["node_modules", "./test", "./dist", "./prisma", "**/**.bak"],
   "include": [
     "src/**/*",
     "src/**/*.json"

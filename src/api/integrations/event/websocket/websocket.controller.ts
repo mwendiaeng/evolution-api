@@ -34,15 +34,12 @@ export class WebsocketController extends EventController implements EventControl
             .map((host) => host.trim())
             .filter(Boolean);
           const allowAllHosts = allowedHosts.includes('*');
-          const normalizeAddress = (address: string | undefined) =>
-            address?.replace(/^::ffff:/, '') || '';
+          const normalizeAddress = (address: string | undefined) => address?.replace(/^::ffff:/, '') || '';
           const strippedAddress = normalizeAddress(remoteAddress);
 
           const isAllowedHost =
             allowAllHosts ||
-            allowedHosts.some(
-              (host) => host === remoteAddress || host === strippedAddress || host === 'localhost',
-            );
+            allowedHosts.some((host) => host === remoteAddress || host === strippedAddress || host === 'localhost');
 
           if (isAllowedHost) {
             return callback(null, true);
