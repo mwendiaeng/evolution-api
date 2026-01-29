@@ -1,15 +1,16 @@
-version: "3.8"
-
 services:
-
-  # ------------------------
-  # Evolution API
-  # ------------------------
+  # ==========================================
+  # Evolution API - Production Service
+  # ==========================================
   api:
     container_name: evolution_api
     image: evoapicloud/evolution-api:latest
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
     restart: always
+    mem_limit: 2g
+    cpus: "1.0"
 
     depends_on:
       redis:
@@ -35,24 +36,36 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "50m"
-        max-file: "5"
+        max-size: "100m"
+        max-file: "10"
 
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 60s
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
 
 
-  # ------------------------
-  # Manager UI
-  # ------------------------
+  # ==========================================
+  # Evolution Manager v2 - Frontend Service
+  # ==========================================
   frontend:
     container_name: evolution_frontend
     image: evoapicloud/evolution-manager:latest
-    build: ./evolution-manager-v2
+    build:
+      context: ./evolution-manager-v2
+      dockerfile: Dockerfile
     restart: always
+    mem_limit: 512m
+    cpus: "0.5"
 
     ports:
       - "127.0.0.1:3000:80"
@@ -63,19 +76,26 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "20m"
+        max-size: "50m"
         max-file: "5"
 
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/", "||", "exit", "1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
-  # ------------------------
-  # Redis (internal only)
-  # ------------------------
+
+  # ==========================================
+  # Redis Cache Service (Internal Only)
+  # ==========================================
   redis:
     container_name: evolution_redis
     image: redis:7.2-alpine
     restart: always
+    mem_limit: 256m
 
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru
 
     volumes:
       - evolution_redis:/data
@@ -99,13 +119,15 @@ services:
       retries: 5
 
 
-  # ------------------------
-  # Postgres (non-standard host port)
-  # ------------------------
+  # ==========================================
+  # PostgreSQL Database Service
+  # ==========================================
   evolution-postgres:
     container_name: evolution_postgres
     image: postgres:15.5-alpine
     restart: always
+    mem_limit: 1g
+    cpus: "1.0"
 
     env_file:
       - .env.prod
@@ -116,13 +138,27 @@ services:
       - listen_addresses=0.0.0.0
       - -c
       - max_connections=300
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - random_page_cost=1.1
 
     environment:
       POSTGRES_DB: ${POSTGRES_DATABASE}
       POSTGRES_USER: ${POSTGRES_USERNAME}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
-    # 🔐 Host DB already uses 5432 → map container to 55432
+    # Host DB already uses 5432 → map container to 55432
     ports:
       - "127.0.0.1:55432:5432"
 
@@ -135,8 +171,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "50m"
-        max-file: "5"
+        max-size: "100m"
+        max-file: "10"
 
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME}"]
@@ -144,19 +180,29 @@ services:
       timeout: 5s
       retries: 5
 
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
 
-# ------------------------
+
+# ==========================================
 # Volumes
-# ------------------------
+# ==========================================
 volumes:
   evolution_instances:
+    driver: local
   evolution_redis:
+    driver: local
   postgres_data:
+    driver: local
 
 
-# ------------------------
+# ==========================================
 # Networks
-# ------------------------
+# ==========================================
 networks:
   evolution-net:
     name: evolution-net
