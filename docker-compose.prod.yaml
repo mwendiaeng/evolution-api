@@ -46,13 +46,6 @@ services:
       retries: 5
       start_period: 60s
 
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
-
 
   # ==========================================
   # Evolution Manager v2 - Frontend Service
@@ -175,17 +168,45 @@ services:
         max-file: "10"
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USERNAME}"]
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$POSTGRES_USER"
+
       interval: 30s
       timeout: 5s
       retries: 5
 
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
+  postgres-backup:
+    container_name: evolution_postgres_backup
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+
+    depends_on:
+      - evolution-postgres
+
+    environment:
+      POSTGRES_HOST: evolution-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # Daily at 02:00
+      SCHEDULE: "@daily"
+
+      # Keep 7 days
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 3
+
+      # Compress backups
+      BACKUP_COMPRESSION: gzip
+
+    volumes:
+        - /var/backups/evolution-postgres:/backups
+
+    networks:
+      - evolution-net
 
 
 # ==========================================
@@ -198,7 +219,8 @@ volumes:
     driver: local
   postgres_data:
     driver: local
-
+  postgres_backups:
+    driver: local
 
 # ==========================================
 # Networks
