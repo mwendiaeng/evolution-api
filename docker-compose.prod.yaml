@@ -8,6 +8,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+      args:
+        DATABASE_PROVIDER: ${DATABASE_PROVIDER}
+        DATABASE_URL: ${DATABASE_URL}
+        
     restart: always
     mem_limit: 2g
     cpus: "1.0"
@@ -26,7 +30,7 @@ services:
       - ./docker-logs:/evolution/logs
 
     env_file:
-      - .env.prod
+      - .env
 
     networks:
       - evolution-net
@@ -123,7 +127,7 @@ services:
     cpus: "1.0"
 
     env_file:
-      - .env.prod
+      - .env
 
     command:
       - postgres
@@ -183,7 +187,8 @@ services:
 
     depends_on:
       - evolution-postgres
-
+    env_file:
+      - .env
     environment:
       POSTGRES_HOST: evolution-postgres
       POSTGRES_PORT: 5432

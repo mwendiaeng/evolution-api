@@ -1,5 +1,12 @@
 FROM node:24-alpine AS builder
 
+# ---- build-time args for DB ----
+ARG DATABASE_PROVIDER
+ARG DATABASE_URL
+
+ENV DATABASE_PROVIDER=${DATABASE_PROVIDER}
+ENV DATABASE_URL=${DATABASE_URL}
+
 RUN apk update && \
     apk add --no-cache git ffmpeg wget curl bash openssl
 
