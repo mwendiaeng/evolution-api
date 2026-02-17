@@ -1,9 +1,14 @@
 .git
 *Dockerfile*
 *docker-compose*
-.env
+# .env
 .env.*
 node_modules
 dist
 **.bak
 docker-logs/
+.cursor/
+.github/
+.husky/
+.vscode
+dist/

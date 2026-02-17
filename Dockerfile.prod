@@ -27,7 +27,7 @@ COPY ./public ./public
 COPY ./prisma ./prisma
 COPY ./manager ./manager
 # COPY ./.env.example ./.env
-# COPY ./.env ./.env
+COPY ./.env ./.env
 COPY ./runWithProvider.js ./
 
 COPY ./Docker ./Docker
@@ -35,6 +35,8 @@ COPY ./Docker ./Docker
 RUN chmod +x ./Docker/scripts/* && dos2unix ./Docker/scripts/*
 
 RUN ./Docker/scripts/generate_database.sh
+
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN npm run build
 
